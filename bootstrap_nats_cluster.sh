@@ -8,10 +8,10 @@ server_ami=ami-2f726546 #Amazon Linux AMI 2014.03
 
 
 function retry() { while ! eval $@; do sleep 10; echo -e "retry...\n"; done } 
-alias ec2='aws ec2ec2'
+alias ec2='aws ec2'
+
 #vpc
 echo "creating vpc for Nats HA Demo"
-
 vpc=`ec2 create-vpc --cidr-block 10.8.0.0/16 |jq .Vpc.VpcId -r`
 echo $vpc 
 
@@ -37,7 +37,7 @@ ec2 create-tags --resources $subnet_prv_a --tags Key=Name,Value=Private-a
 ec2 create-tags --resources $subnet_prv_b --tags Key=Name,Value=Private-b
 
 #igw
-igw=`ec2 create-internet-gateway | jq .InternetGateway.InternetGatewayId |trim`
+igw=`ec2 create-internet-gateway | jq .InternetGateway.InternetGatewayId -r`
 echo $igw
 ec2 attach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc 
 
@@ -85,8 +85,8 @@ echo "NAT egress IP: $eip"
 
 #route tables
 rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId -r`
-rt_a=`ec2 create-route-table --vpc-id $vpc | jq . -r`
-rt_b=`ec2 create-route-table --vpc-id $vpc | jq . -r`
+rt_a=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId -r`
+rt_b=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId -r`
 ec2 create-tags --resources $rt_a          --tags Key=Name,Value=RT_A
 ec2 create-tags --resources $rt_b          --tags Key=Name,Value=RT_B
 
