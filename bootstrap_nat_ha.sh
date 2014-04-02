@@ -82,13 +82,13 @@ ec2 associate-address --instance-id $nat_a --allocation-id $eipalloc_nat
 
 
 #route tables
-#rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId -r`
+rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId -r`
 rt_a=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId -r`
 rt_b=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId -r`
 ec2 create-tags --resources $rt_a          --tags Key=Name,Value=RT_A
 ec2 create-tags --resources $rt_b          --tags Key=Name,Value=RT_B
 
-#ec2 create-route --route-table-id $rt_main --destination-cidr-block 0.0.0.0/0 --gateway-id $igw
+ec2 create-route --route-table-id $rt_main --destination-cidr-block 0.0.0.0/0 --gateway-id $igw
 ec2 create-route --route-table-id $rt_a --destination-cidr-block 0.0.0.0/0 --instance-id $nat_a
 ec2 create-route --route-table-id $rt_b --destination-cidr-block 0.0.0.0/0 --instance-id $nat_b
 
