@@ -11,7 +11,7 @@ function retry() { while ! eval $@; do sleep 10; echo -e "retry...\n"; done }
 alias ec2='aws ec2'
 
 #vpc
-echo "creating vpc for Nats HA Demo"
+echo "creating vpc for Nat HA Demo"
 vpc=`ec2 create-vpc --cidr-block 10.8.0.0/16 |jq .Vpc.VpcId -r`
 echo $vpc 
 
@@ -76,7 +76,7 @@ echo "allocating Elastic IPs"
 js=`ec2 allocate-address --domain vpc`
 eip_jb=`echo "$js" | jq .PublicIp -r`
 eipalloc_jb=`echo "$js" | jq .AllocationId -r`
-echo "jumpbox ip: $eip_jb"
+echo "Jumpbox IP: $eip_jb"
 
 js=`ec2 allocate-address --domain vpc`
 eip_nat=`echo "$js" | jq .PublicIp -r`
@@ -84,35 +84,37 @@ eipalloc_nat=`echo "$js" | jq .AllocationId -r`
 echo "NAT egress IP: $eip"
 
 #route tables
-rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId -r`
+#rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId -r`
 rt_a=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId -r`
 rt_b=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId -r`
 ec2 create-tags --resources $rt_a          --tags Key=Name,Value=RT_A
 ec2 create-tags --resources $rt_b          --tags Key=Name,Value=RT_B
 
-ec2 create-route --route-table-id $rt_main --destination-cidr-block 0.0.0.0/0 --gateway-id $igw
+#ec2 create-route --route-table-id $rt_main --destination-cidr-block 0.0.0.0/0 --gateway-id $igw
 ec2 create-route --route-table-id $rt_a --destination-cidr-block 0.0.0.0/0 --instance-id $nat_a
 ec2 create-route --route-table-id $rt_b --destination-cidr-block 0.0.0.0/0 --instance-id $nat_b
 
+ec2 associate-route-table --subnet-id $subnet_prv_a --route-table-id $rt_a
+ec2 associate-route-table --subnet-id $subnet_prv_b --route-table-id $rt_a
 
 #attach EIPs
 ec2 associate-address --instance-id $jbox --allocation-id $eipalloc_jb
 ec2 associate-address --instance-id $nat_a --allocation-id $eipalloc_nat
 
 
-echo "run ssh ec2-user@$eip_jb to play"
-echo "run nuke to destroy the demo"
+echo "run \'ssh -A ec2-user@$eip_jb \' to play"
+echo "run 'nuke' to destroy the demo env"
 
 function nuke() {
-  ec2 disassociate-address --public-ip $eip_nat
-  ec2 disassociate-address --public-ip $eip_jb
-#  ec2 release-address --public-ip $eip --allocation-id $alcid
+
   ec2 terminate-instances --instance-ids $jbox $nat_a $nat_b $server_a $server_b
   sleep 60
+  ec2 release-address --allocation-id $eipalloc_jb
+  ec2 release-address --allocation-id $eipalloc_nat
+
   ec2 delete-security-group --group-id $sg
-  ec2 delete-vpc --vpc-id $vpc
-  
-  
+  retry ec2 delete-vpc --vpc-id $vpc
+
   unalias ec2
 }
 
