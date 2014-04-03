@@ -47,7 +47,7 @@ echo "launching instances"
 echo "======================="
 
 jbox=`ec2 run-instances --image-id    $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
-    --private-ip-address 10.8.0.4 | jq .Instances[0].InstanceId -r`
+    --private-ip-address 10.8.0.8 | jq .Instances[0].InstanceId -r`
 nat_a=`ec2 run-instances --image-id    $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
     --private-ip-address 10.8.0.5 | jq .Instances[0].InstanceId -r`
 nat_b=`ec2 run-instances --image-id    $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
@@ -63,6 +63,11 @@ ec2 create-tags --resources $nat_a         --tags Key=Name,Value=Nat_Box_A
 ec2 create-tags --resources $nat_b         --tags Key=Name,Value=Nat_Box_B
 ec2 create-tags --resources $server_a      --tags Key=Name,Value=Server_A
 
+eth_a=`ec2 describe-instances --instance-id $nat_a | jq .Reservations[].Instances[].NetworkInterfaces[].NetworkInterfaceId -r`
+eth_b=`ec2 describe-instances --instance-id $nat_b | jq .Reservations[].Instances[].NetworkInterfaces[].NetworkInterfaceId -r`
+
+ec2 assign-private-ip-addresses --network-interface-id $eth_a --private-ip-addresses 10.8.0.4 --allow-reassignment
+
 #elastic IP
 echo "allocating Elastic IPs"
 echo "======================="
@@ -76,10 +81,21 @@ eip_nat=`echo "$js" | jq .PublicIp -r`
 eipalloc_nat=`echo "$js" | jq .AllocationId -r`
 echo "NAT egress IP: $eip_nat"
 
+js=`ec2 allocate-address --domain vpc`
+eip_a=`echo "$js" | jq .PublicIp -r`
+eipalloc_a=`echo "$js" | jq .AllocationId -r`
+echo "Nat_Box_A IP: $eip_a"
+
+js=`ec2 allocate-address --domain vpc`
+eip_b=`echo "$js" | jq .PublicIp -r`
+eipalloc_b=`echo "$js" | jq .AllocationId -r`
+echo "Nat_Box_B IP: $eip_b"
+
 #attach EIPs
 ec2 associate-address --instance-id $jbox --allocation-id $eipalloc_jb
-ec2 associate-address --instance-id $nat_a --allocation-id $eipalloc_nat
-
+ec2 associate-address --instance-id $nat_a --allocation-id $eipalloc_a
+ec2 associate-address --instance-id $nat_a --allocation-id $eipalloc_nat --private-ip-address 10.8.0.4
+ec2 associate-address --instance-id $nat_b --allocation-id $eipalloc_b
 
 #route tables
 rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId -r`
@@ -108,6 +124,8 @@ function nuke() {
   ec2 delete-security-group --group-id $sg
   ec2 detach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc
   ec2 delete-internet-gateway --internet-gateway-id $igw
+  ec2 delete-route-table --route-table-id $rt_a
+  ec2 delete-route-table --route-table-id $rt_b
   ec2 delete-subnet --subnet-id $subnet_pub_a
   ec2 delete-subnet --subnet-id $subnet_prv_a
   retry ec2 delete-vpc --vpc-id $vpc
