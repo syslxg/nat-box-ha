@@ -7,7 +7,7 @@ az=$BOSH_VPC_PRIMARY_AZ
 nat_ami=ami-ad227cc4 #amzn-ami-vpc-nat-pv-2013.09.0.x86_64-ebs
 server_ami=ami-2f726546 #Amazon Linux AMI 2014.03
 
-function retry() { i=3; while [ $i -ge 1 ] ; do  eval $@ && break; i=$((i-1)); sleep 10; echo -e "retry...\n"; done } 
+function retry() { i=3; while [ $i -ge 1 ] ; do  eval $@ && break; i=$((i-1)); sleep 10; echo -e "retry...\n"; done }
 alias ec2='retry aws ec2'
 alias ec2t='retry aws --output text ec2'
 alias jq='jq -r'
@@ -16,12 +16,12 @@ alias jq='jq -r'
 echo "creating vpc for Nat HA Demo"
 echo "======================="
 vpc=`ec2 create-vpc --cidr-block 10.8.0.0/16 |jq .Vpc.VpcId `
-echo $vpc 
+echo $vpc
 
 #subnets
 echo "creating subnets"
 echo "======================="
-subnet_pub_a=`ec2 create-subnet --cidr-block 10.8.0.0/24 --vpc-id $vpc --availability-zone $az | jq .Subnet.SubnetId ` 
+subnet_pub_a=`ec2 create-subnet --cidr-block 10.8.0.0/24 --vpc-id $vpc --availability-zone $az | jq .Subnet.SubnetId `
 echo $subnet_pub_a
 
 subnet_prv_a=`ec2 create-subnet --cidr-block 10.8.2.0/24 --vpc-id $vpc --availability-zone $az | jq .Subnet.SubnetId `
@@ -34,7 +34,7 @@ ec2t create-tags --resources $subnet_prv_a --tags Key=Name,Value=Private-a
 #igw
 igw=`ec2 create-internet-gateway | jq .InternetGateway.InternetGatewayId `
 echo $igw
-ec2t attach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc 
+ec2t attach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc
 
 #sg
 echo "creating security group"
@@ -76,22 +76,36 @@ js=`ec2 allocate-address --domain vpc`
 eip_nat=`echo "$js" | jq .PublicIp `
 eipalloc_nat=`echo "$js" | jq .AllocationId`
 
+js=`ec2 allocate-address --domain vpc`
+eip_a=`echo "$js" | jq .PublicIp `
+eipalloc_a=`echo "$js" | jq .AllocationId`
+
+js=`ec2 allocate-address --domain vpc`
+eip_b=`echo "$js" | jq .PublicIp `
+eipalloc_b=`echo "$js" | jq .AllocationId`
 echo "NAT egress IP: $eip_nat"
 echo "Controller IP: $eip_c"
+
+#ENI
+floating_nic=`ec2 create-network-interface --subnet-id $subnet_pub_a --private-ip-address 10.8.0.7 --group $sg | jq .NetworkInterface.NetworkInterfaceId`
+ec2t create-tags --resources $floating_ip --tags Key=Name,Value=Floating-NIC
+ec2t  modify-network-interface-attribute --network-interface-id $floating_nic --source-dest-check false
+ec2t attach-network-interface --network-interface-id $floating_nic --instance-id $nat_a --device-index 1
+
 #attach EIPs
 ec2t associate-address --instance-id $controller --allocation-id $eipalloc_c
-ec2t associate-address --instance-id $nat_a --allocation-id $eipalloc_nat --allow-reassociation
+ec2t associate-address --instance-id $nat_a --allocation-id $eipalloc_a
+ec2t associate-address --instance-id $nat_b --allocation-id $eipalloc_b
+ec2t associate-address --network-interface-id $floating_nic --allocation-id $eipalloc_nat --allow-reassociation
 
 #route tables
 rt_main=`ec2 describe-route-tables --filter Name=vpc-id,Values=$vpc Name=association.main,Values=true | jq .RouteTables[].RouteTableId `
 rt_a=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId `
-rt_b=`ec2 create-route-table --vpc-id $vpc | jq .RouteTable.RouteTableId `
 ec2t create-tags --resources $rt_a          --tags Key=Name,Value=RT_A
 ec2t create-tags --resources $rt_b          --tags Key=Name,Value=RT_B
 
 ec2t create-route --route-table-id $rt_main --destination-cidr-block 0.0.0.0/0 --gateway-id $igw
-ec2t create-route --route-table-id $rt_a --destination-cidr-block 0.0.0.0/0 --instance-id $nat_a
-ec2t create-route --route-table-id $rt_b --destination-cidr-block 0.0.0.0/0 --instance-id $nat_b
+ec2t create-route --route-table-id $rt_a --destination-cidr-block 0.0.0.0/0 --network-interface-id $floating_nic
 
 ec2t associate-route-table --subnet-id $subnet_prv_a --route-table-id $rt_a
 
@@ -103,8 +117,11 @@ function nuke() {
 
   ec2t terminate-instances --instance-ids $controller $nat_a $nat_b $server_a
   sleep 60
+  ec2t delete-network-interface --network-interface-id $floating_nic
   ec2t release-address --allocation-id $eipalloc_c
   ec2t release-address --allocation-id $eipalloc_nat
+  ec2t release-address --allocation-id $eipalloc_a
+  ec2t release-address --allocation-id $eipalloc_b
 
   ec2t delete-security-group --group-id $sg
   ec2t detach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc
@@ -112,6 +129,5 @@ function nuke() {
   ec2t delete-subnet --subnet-id $subnet_pub_a
   ec2t delete-subnet --subnet-id $subnet_prv_a
   ec2t delete-route-table --route-table-id $rt_a
-  ec2t delete-route-table --route-table-id $rt_b
   ec2t delete-vpc --vpc-id $vpc
 }
