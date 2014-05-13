@@ -1,24 +1,26 @@
 How it works
 ------------
-2 subnets:
-- public
-- private
+- Two subnets:
+  - public
+  - private
 
-4 instances:
-nat box A
-nat box B
-controller
-server A
+- Four instances:
+  - nat box A
+  - nat box B
+  - controller
+  - server A
 
-2 Elastic IPs
-- 1 for NAT egress address
-- 1 for controller
-
-2 route tables
-- rt A points to nat box A
-- rt B points to nat box B
+- One Elastic Network Inteface
 
 
+- Four Elastic IPs
+  - 1 for NAT egress address
+  - 1 for controller
+  - 1 for box A
+  - 1 for box B
+
+- One route table
+  - rt A points to the eni for 0.0.0.0/0
 
 Usage
 ------
