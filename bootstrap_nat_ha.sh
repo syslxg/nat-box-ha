@@ -49,7 +49,7 @@ echo "launching instances"
 echo "======================="
 
 controller=`ec2 run-instances --image-id $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
-    --private-ip-address 10.8.0.8 | jq .Instances[0].InstanceId `
+    --private-ip-address 10.8.0.8 --iam-instance-profile Name=nat-ha-controller | jq .Instances[0].InstanceId `
 nat_a=`ec2 run-instances --image-id $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
     --private-ip-address 10.8.0.5 | jq .Instances[0].InstanceId `
 nat_b=`ec2 run-instances --image-id $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
