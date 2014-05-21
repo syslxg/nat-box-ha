@@ -1,0 +1,5 @@
+#cloud-config
+runcmd:
+- route del -net 0.0.0.0 netmask 0.0.0.0 dev eth0
+- route add -net 0.0.0.0 netmask 0.0.0.0 dev eth0 metric 20000 gateway 10.8.0.1
+- iptables -t nat -A POSTROUTING -s 10.8.0.0/16 -o eth1 -j MASQUERADE

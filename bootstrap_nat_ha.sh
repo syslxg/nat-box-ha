@@ -51,9 +51,9 @@ echo "======================="
 controller=`ec2 run-instances --image-id $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
     --private-ip-address 10.8.0.8 --iam-instance-profile Name=nat-ha-controller | jq .Instances[0].InstanceId `
 nat_a=`ec2 run-instances --image-id $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
-    --private-ip-address 10.8.0.5 | jq .Instances[0].InstanceId `
+    --private-ip-address 10.8.0.5 --user-data file://user_data_nat.txt | jq .Instances[0].InstanceId `
 nat_b=`ec2 run-instances --image-id $nat_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_pub_a \
-    --private-ip-address 10.8.0.6 | jq .Instances[0].InstanceId `
+    --private-ip-address 10.8.0.6 --user-data file://user_data_nat.txt | jq .Instances[0].InstanceId `
 server_a=`ec2 run-instances --image-id $server_ami --count 1 --instance-type t1.micro --key-name bosh --security-group-ids $sg --subnet-id $subnet_prv_a \
     --private-ip-address 10.8.2.9 | jq .Instances[0].InstanceId `
 
@@ -90,7 +90,7 @@ echo "Controller IP: $eip_c"
 echo "creating Elastic NIC"
 echo "===================="
 floating_nic=`ec2 create-network-interface --subnet-id $subnet_pub_a --private-ip-address 10.8.0.7 --group $sg | jq .NetworkInterface.NetworkInterfaceId`
-ec2t create-tags --resources $floating_nic --tags Key=Name,Value=Floating-NIC
+ec2t create-tags --resources $floating_nic --tags Key=Name,Value=Floating_NIC
 ec2t  modify-network-interface-attribute --network-interface-id $floating_nic --source-dest-check false
 
 #attach EIPs
