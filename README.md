@@ -7,7 +7,7 @@ Prerequisites
 
 Usage
 ------
-1  edit `bootstrap_nat_ha.sh` to setup AWS credential
+1. edit `bootstrap_nat_ha.sh` to setup AWS credential
 1. `. bootstrap_nat_ha.sh`
 1. ssh into the controller: `ssh -A ec2-user@$eip_c`
 1. run controller.sh from screen/tmux
